@@ -28,9 +28,9 @@ This project is prepared for publication; creating local files does not itself p
 - Play cooperatively or take turns at the same device. Select a dot, choose its color, and use **Add a child** to grow a branch. Every new child becomes selected. Select its parent again to add a sibling.
 - Tree number *i* can have between 1 and *i* dots. You do not need to use the whole allowance.
 - **Check my tree** explains whether the current draft is legal. **Plant this tree** checks it again and adds it only if legal.
-- If a previous tree hides in the draft, the board highlights a witness. **Show me the match** pairs numbered dots across both trees and traces the stretched branches in gold.
+- If a previous tree hides in the draft, the board highlights a witness. **Show me the match** opens the subtree explorer. Choose an earlier tree, then select any dot in the draft as the exact starting point for its root. The explorer marks which starting dots work, pairs numbered dots across both trees, and traces stretched branches in gold.
 - Click any planted tree to compare it with the draft. Use **Undo last edit**, **Remove branch**, or **Take back last tree** to explore another route.
-- **How trees hide** has six small quizzes. Warm-ups offer TREE(1) and TREE(2).
+- **How trees hide** starts with an interactive subtree explorer, followed by six small quizzes. Step through the whole new tree, a selected rooted subtree, the traced match, and a simplified redraw with unused branches and skipped dots removed. Four practice examples explain hidden roots, matching root colors without the full pattern, fork preservation, and one-dot trees. The practice diagrams are independent of the game's move-size limit. Warm-ups offer TREE(1) and TREE(2).
 - The current forest and draft are saved in this browser’s local storage. Nothing is sent to a game server. Browsers that block storage can still play for the current session. Google Fonts are optional; system fonts work if they cannot load.
 
 ## The mathematical rule
@@ -44,6 +44,8 @@ Consequently, edges may stretch along downward paths, surplus branches may be ig
 
 The game checks **all** earlier trees. It does not confuse ordinary subtree equality with homeomorphic embedding. See [Harvey Friedman’s labeled finite-tree formulation](https://fomarchive.ugent.be/1998-September/002153.html).
 
+A root is a single dot; its **rooted subtree** consists of that dot and all its descendants. A legal new tree must avoid every earlier whole tree at every possible starting dot. Seeing just an earlier root color or a fragment is not enough to block a move. If an earlier whole tree is one dot, however, that color is forbidden everywhere from then on.
+
 TREE(1) = 1 and TREE(2) = 3; for example: one blue dot, two red dots in a chain, then one red dot. TREE(3) is finite but unimaginably large. This is a game of building legal sequences, not an attempt to compute that number or an optimal move solver. The UI announces a completed forest only in the provable case where every available color has already appeared as a one-dot tree. There may be other dead ends; it does not claim a general search for remaining moves. Large trees and long histories are limited by browser resources.
 
 ## Validation
@@ -52,6 +54,6 @@ TREE(1) = 1 and TREE(2) = 3; for example: one blue dot, two red dots in a chain,
 npm test
 ```
 
-The engine uses memoized embedding checks and bipartite matching between child branches. Tests cover color equality, root relocation, stretched paths, child-order independence, fork preservation, direction, injection, branch reassignment, size limits, all-history checks, malformed trees, and TREE(1)/TREE(2). An independent brute-force injection/LCA oracle checks all **13,924 pairs** of two-colored increasing trees of up to four dots, including each reported witness.
+The engine uses memoized embedding checks and bipartite matching between child branches. Tests cover color equality, root relocation, stretched paths, child-order independence, fork preservation, direction, injection, branch reassignment, size limits, all-history checks, malformed trees, and TREE(1)/TREE(2). An independent brute-force injection/LCA oracle checks all **13,924 pairs** of two-colored increasing trees of up to four dots, including each reported witness. It also checks every exact root placement in those pairs. Additional tests verify that rooted-subtree extraction preserves all descendants without modifying the original and that a root-color match alone is insufficient. `findEmbedding(source, target, rootAt)` fixes the source root at the specified target dot; omitting `rootAt` searches anywhere.
 
 Files: `engine.js` is the pure math engine; `app.js` handles editing, witness diagrams, lessons, and local saving; `index.html` and `style.css` contain the interface.

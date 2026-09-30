@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { findEmbedding, checkMove, makeTree, validateTree, embeddingPaths, removeBranch } from '../engine.js';
+import { findEmbedding, checkMove, makeTree, validateTree, embeddingPaths, removeBranch, rootedSubtree } from '../engine.js';
 
 const tree = makeTree;
 const fits = (a, b) => Boolean(findEmbedding(tree(a), tree(b)));
@@ -30,6 +30,32 @@ test('matching reassigns branches rather than relying on a greedy first fit', ()
 test('each old dot needs its own target dot', () => {
   assert.equal(fits([0, [1], [1]], [0, [1]]), false);
   assert.equal(fits([0, [0]], [0]), false);
+});
+test('a chosen starting dot fixes the old root, rather than searching below it', () => {
+  const a = tree([0, [1]]), b = tree([0, [0, [1]], [2]]);
+  assert.equal(findEmbedding(a, b, 0)[0], 0);
+  assert.equal(findEmbedding(a, b, 1)[0], 1);
+  assert.equal(findEmbedding(a, b, 2), null);
+  assert.equal(findEmbedding(a, b, 99), null);
+  const hidden = tree([2, [0, [2, [1]]]]);
+  assert.equal(findEmbedding(a, hidden, 0), null);
+  assert.deepEqual(findEmbedding(a, hidden, 1), { 0: 1, 1: 3 });
+});
+test('a whole old tree is forbidden, not each of its root colors or pieces', () => {
+  assert.equal(fits([0, [1]], [2, [0, [2], [0]]]), false);
+  assert.equal(fits([0], [2, [0, [2], [0]]]), true);
+});
+test('rooted subtrees keep all descendants and IDs without mutating the original', () => {
+  const original = tree([2, [0, [2, [1]], [1], [2]]]);
+  const snapshot = structuredClone(original);
+  const part = rootedSubtree([...original].reverse(), 1);
+  assert.equal(validateTree(part), true);
+  assert.deepEqual(part.map(n => n.id).sort(), [1, 2, 3, 4, 5]);
+  assert.equal(part.find(n => n.id === 1).parent, null);
+  assert.equal(part.find(n => n.id === 3).parent, 2);
+  assert.deepEqual(rootedSubtree(original, 3), [{ id: 3, parent: null, color: 1 }]);
+  assert.deepEqual(rootedSubtree(original, 99), []);
+  assert.deepEqual(original, snapshot);
 });
 test('moves enforce the size limit, nonempty rooted structure, and all old trees', () => {
   assert.deepEqual(checkMove(tree([0, [1]]), []), { legal: false, reason: 'size', limit: 1 });
@@ -77,13 +103,14 @@ function isWitness(a, b, mapping) {
   }
   return true;
 }
-function bruteEmbedding(a, b) {
+function bruteEmbedding(a, b, rootAt = null) {
   if (a.length > b.length) return false;
   const mapping = {}, used = new Set();
   function assign(i) {
     if (i === a.length) return isWitness(a, b, mapping);
     for (const y of b) {
       if (a[i].color !== y.color || used.has(y.id)) continue;
+      if (a[i].parent === null && rootAt !== null && y.id !== rootAt) continue;
       mapping[a[i].id] = y.id; used.add(y.id);
       if (assign(i + 1)) return true;
       used.delete(y.id); delete mapping[a[i].id];
@@ -111,5 +138,13 @@ test('all 13,924 pairs of two-colored increasing trees up to 4 dots agree with t
     const mapping = findEmbedding(a, b);
     assert.equal(Boolean(mapping), bruteEmbedding(a, b), JSON.stringify({ a, b }));
     if (mapping) assert.ok(isWitness(a, b, mapping));
+    for (const node of b) {
+      const anchored = findEmbedding(a, b, node.id);
+      assert.equal(Boolean(anchored), bruteEmbedding(a, b, node.id), JSON.stringify({ a, b, start: node.id }));
+      if (anchored) {
+        assert.equal(anchored[a.find(n => n.parent === null).id], node.id);
+        assert.ok(isWitness(a, b, anchored));
+      }
+    }
   }
 });

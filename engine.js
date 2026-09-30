@@ -34,7 +34,7 @@ function index(tree) {
  * must embed somewhere in a DISTINCT immediate branch of the target parent.
  * Bipartite augmenting paths find this assignment without a greedy-order bug.
  */
-export function findEmbedding(source, target) {
+export function findEmbedding(source, target, rootAt = null) {
   if (source.length > target.length) return null;
   const a = index(source), b = index(target);
   const anchoredMemo = new Map(), anywhereMemo = new Map();
@@ -76,7 +76,19 @@ export function findEmbedding(source, target) {
     anchoredMemo.set(key, result);
     return result;
   }
-  return anywhere(a.root, b.root);
+  // A supplied rootAt fixes the image of the OLD root at exactly this dot.
+  // Searching anywhere inside its descendants would answer a different question.
+  return rootAt === null ? anywhere(a.root, b.root) : b.nodes.has(rootAt) ? anchored(a.root, rootAt) : null;
+}
+
+/** The ordinary rooted subtree: this dot and ALL its descendants, with IDs kept. */
+export function rootedSubtree(tree, rootId) {
+  if (!tree.some(n => n.id === rootId)) return [];
+  const children = new Map(tree.map(n => [n.id, []]));
+  for (const n of tree) if (n.parent !== null) children.get(n.parent).push(n.id);
+  const ids = new Set([rootId]), queue = [rootId];
+  for (let i = 0; i < queue.length; i++) for (const id of children.get(queue[i])) { ids.add(id); queue.push(id); }
+  return tree.filter(n => ids.has(n.id)).map(n => ({ ...n, parent: n.id === rootId ? null : n.parent }));
 }
 
 export function checkMove(tree, history, colors = 3) {

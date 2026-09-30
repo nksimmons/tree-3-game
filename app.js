@@ -1,4 +1,4 @@
-import { checkMove, findEmbedding, embeddingPaths, removeBranch, makeTree, validateTree } from './engine.js';
+import { checkMove, findEmbedding, embeddingPaths, removeBranch, makeTree, validateTree, rootedSubtree } from './engine.js';
 
 const $ = selector => document.querySelector(selector);
 const COLORS = [ { name: 'Blue', letter: 'B', fill: '#3972c3' }, { name: 'Red', letter: 'R', fill: '#c55442' }, { name: 'Yellow', letter: 'Y', fill: '#e2b332' } ];
@@ -41,7 +41,7 @@ function layout(tree) {
   return { positions, width, height, root };
 }
 
-function treeSvg(tree, { interactive = false, mapping = null, source = null, sourceLabels = false, mini = false } = {}) {
+function treeSvg(tree, { interactive = false, mapping = null, source = null, sourceLabels = false, mini = false, explore = false, activeNode = selected, scope = null } = {}) {
   const { positions, width, height, root } = layout(tree);
   const marks = new Map();
   let paths = null;
@@ -51,20 +51,24 @@ function treeSvg(tree, { interactive = false, mapping = null, source = null, sou
   }
   if (sourceLabels) tree.forEach((n, i) => marks.set(n.id, i + 1));
   const nodeDescription = tree.map(n => `${COLORS[n.color].name} dot ${n.id + 1}${n.parent === null ? ' (root)' : `, child of dot ${n.parent + 1}`}`).join('; ');
-  let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" role="${interactive ? 'group' : 'img'}" aria-label="${nodeDescription}"${interactive ? ` style="min-width:${Math.min(width, 1800)}px;min-height:${height}px"` : ''}>`;
+  const clickable = interactive || explore;
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" role="${clickable ? 'group' : 'img'}" aria-label="${nodeDescription}"${interactive ? ` style="min-width:${Math.min(width, 1800)}px;min-height:${height}px"` : ''}>`;
   for (const n of tree) {
     if (n.parent === null) continue;
     const p = positions.get(n.parent), q = positions.get(n.id);
-    svg += `<line x1="${p.x}" y1="${p.y}" x2="${q.x}" y2="${q.y}" class="tree-edge${paths?.edges.has(n.id) ? ' match' : paths ? ' fade' : ''}"/>`;
+    svg += `<line x1="${p.x}" y1="${p.y}" x2="${q.x}" y2="${q.y}" class="tree-edge${paths?.edges.has(n.id) ? ' match' : paths || (scope && (!scope.has(n.id) || !scope.has(n.parent))) ? ' fade' : ''}"/>`;
   }
   if (!mini) svg += `<text class="root-label" x="${positions.get(root).x}" y="${positions.get(root).y - 35}">ROOT</text>`;
   for (const n of tree) {
     const p = positions.get(n.id), color = COLORS[n.color], matched = marks.has(n.id);
-    svg += `<g class="tree-node${paths && !paths.nodes.has(n.id) ? ' fade' : ''}" transform="translate(${p.x},${p.y})"${interactive ? ` role="button" tabindex="0" aria-label="${color.name} dot ${n.id + 1}${n.id === root ? ', root' : ''}${selected === n.id ? ', selected' : ''}" aria-pressed="${selected === n.id}" data-node="${n.id}"` : ''}>`;
-    if (interactive && selected === n.id) svg += '<circle class="selection-ring" r="28"/>';
+    const skipped = paths?.nodes.has(n.id) && !matched;
+    const faded = paths ? !paths.nodes.has(n.id) : scope && !scope.has(n.id);
+    svg += `<g class="tree-node${faded ? ' fade' : ''}${skipped ? ' skipped-node' : ''}" transform="translate(${p.x},${p.y})"${clickable ? ` role="button" tabindex="0" aria-label="${explore ? 'Try starting at ' : ''}${color.name} dot ${n.id + 1}${n.id === root ? ', root' : ''}${activeNode === n.id ? ', selected' : ''}" aria-pressed="${activeNode === n.id}" ${explore ? 'data-explorer-node' : 'data-node'}="${n.id}"` : ''}>`;
+    if (clickable && activeNode === n.id) svg += `<circle class="${explore ? 'start-ring' : 'selection-ring'}" r="${explore ? 31 : 28}"/>`;
     if (matched) svg += '<circle class="match-ring" r="26"/>';
     svg += `<circle class="node-fill" r="21" fill="${color.fill}"/><text class="${n.color === 2 ? 'dark-letter' : ''}" y="0">${color.letter}</text>`;
     if (matched) svg += `<circle class="badge-bg" cx="21" cy="-20" r="10"/><text class="match-number" x="21" y="-20">${marks.get(n.id)}</text>`;
+    if (explore) svg += `<text class="dot-identifier" y="${activeNode === n.id ? 44 : 35}">dot ${n.id + 1}</text>`;
     svg += '</g>';
   }
   return svg + '</svg>';
@@ -196,10 +200,75 @@ $('#take-back').addEventListener('click', () => confirmChange('Take back the las
   state.draft = state.history.pop(); selected = state.draft.find(n => n.parent === null).id; edits = []; feedback = null; render();
 }));
 
+/** Shared explorer for the practice diagrams and actual planted-tree comparisons. */
+function mountExplorer(container, source, target, { sourceName = 'The earlier whole tree', startWithMatch = false } = {}) {
+  const oldRoot = source.find(n => n.parent === null);
+  const newRoot = target.find(n => n.parent === null);
+  const matches = new Map(target.map(n => [n.id, findEmbedding(source, target, n.id)]));
+  const working = target.filter(n => matches.get(n.id));
+  let start = startWithMatch && working.length ? working[0].id : newRoot.id;
+  let stage = startWithMatch && working.length ? 2 : 0;
+  const names = ['1. Whole tree', '2. This subtree', '3. Trace the match', '4. Skip the extras'];
+
+  function draw() {
+    const node = target.find(n => n.id === start), mapping = matches.get(start);
+    const subtree = rootedSubtree(target, start), scope = new Set(subtree.map(n => n.id));
+    const matchView = stage >= 2 && mapping;
+    const simplified = mapping ? source.map(n => ({ id: mapping[n.id], parent: n.parent === null ? null : mapping[n.parent], color: n.color })) : null;
+    let selectedExplanation;
+    if (mapping) {
+      selectedExplanation = `The old ${COLORS[oldRoot.color].name.toLowerCase()} root can land on dot ${start + 1}. Every other old dot also has a same-colored match below it, with the right branching pattern.`;
+    } else if (node.color !== oldRoot.color) {
+      selectedExplanation = `The earlier root is ${COLORS[oldRoot.color].name.toLowerCase()}, but dot ${start + 1} is ${COLORS[node.color].name.toLowerCase()}. Those roots cannot match. A different starting dot might still work.`;
+    } else {
+      selectedExplanation = `Dot ${start + 1} has the right root color, but the whole old pattern does not fit below it. Matching the root color alone is not enough.`;
+    }
+    const stageExplanation = [
+      'This is the whole new tree. Pick any dot as the possible home of the earlier root. The thick green ring marks your choice.',
+      `Keep dot ${start + 1} and all its descendants. That is its rooted subtree (${subtree.length} ${subtree.length === 1 ? 'dot' : 'dots'}). Everything outside it is faded. The tree’s original root stays where it was.`,
+      'Pair the gold numbers: 1 with 1, 2 with 2, and so on. Gold lines follow the old branches. Dashed dots on these paths are skipped; faded dots and branches are unused.',
+      'Ignore the unused branches and remove the skipped dots from the traced paths. What remains is the whole earlier pattern! This redraw explains the match; it does not change your tree.'
+    ][stage];
+    container.innerHTML = `<div class="explorer-verdict ${working.length ? 'has-match' : 'no-match'}"><div><strong>${working.length ? `The old tree fits at ${working.length} starting ${working.length === 1 ? 'dot' : 'dots'}.` : 'This old tree fits nowhere in the new tree.'}</strong><p>${working.length ? 'One working start anywhere is enough to make this new tree illegal if the old tree was already planted.' : 'This old tree does not block the move. In a game, the dot limit and every other earlier tree still matter.'}</p></div>${working.length ? '<button class="button outline" data-show-working>Show a working start</button>' : ''}</div>
+      <div class="explorer-stages" role="group" aria-label="Steps for seeing the subtree">${names.map((name, i) => `<button class="stage-button" data-stage="${i}" aria-pressed="${i === stage}" ${i >= 2 && !mapping ? 'disabled title="Choose a starting dot where the old tree fits first"' : ''}>${name}</button>`).join('')}</div>
+      <div class="explorer-diagrams"><section><h3>${sourceName}</h3><div class="explorer-diagram old-pattern">${treeSvg(source, { sourceLabels: Boolean(matchView) })}</div><p class="diagram-caption">We need to find <strong>all ${source.length} ${source.length === 1 ? 'dot' : 'dots'}</strong> of this tree.</p></section><section><h3>${stage === 3 ? 'The hidden pattern, with extras removed' : 'The new tree · choose a starting dot'}</h3><div class="explorer-diagram new-pattern">${stage === 3 ? treeSvg(simplified, { sourceLabels: true }) : treeSvg(target, { explore: true, activeNode: start, scope: stage === 1 ? scope : null, mapping: matchView ? mapping : null, source })}</div><p class="diagram-caption">${stage === 3 ? 'Same colors. Same connections. Same old tree.' : `Selected start: <strong>${COLORS[node.color].name.toLowerCase()} dot ${start + 1}</strong>${start === newRoot.id ? ' · also the whole tree’s root.' : ' · below the whole tree’s root.'}`}</p></section></div>
+      <p class="stage-explanation" aria-live="polite">${stageExplanation}</p>
+      <div class="start-selector"><h3>Test every starting dot</h3><p>“Fits” means the <em>whole</em> old tree fits with its root at that exact dot.</p><div class="start-buttons" role="group" aria-label="Possible starting dots">${target.map(n => `<button data-start="${n.id}" class="start-button" aria-pressed="${n.id === start}"><span class="swatch c${n.color}" style="background:${COLORS[n.color].fill}" aria-hidden="true">${COLORS[n.color].letter}</span><span>Dot ${n.id + 1}</span><span class="start-result ${matches.get(n.id) ? 'fits' : ''}">${matches.get(n.id) ? '✓ Fits' : 'No match'}</span></button>`).join('')}</div></div>
+      <div class="selected-explanation" role="status"><strong>${mapping ? `Yes, starting at dot ${start + 1}.` : `No match starting at dot ${start + 1}.`}</strong> ${selectedExplanation}${!mapping && working.length ? ` There is still a match starting at dot ${working[0].id + 1}, so the new tree is blocked by this old tree.` : ''}</div>`;
+  }
+  function activate(event) {
+    const control = event.target.closest('[data-explorer-node], [data-start], [data-stage], [data-show-working]');
+    if (!control || !container.contains(control)) return;
+    // Native buttons synthesize their own click. SVG buttons need keyboard handling.
+    if (event.type === 'keydown') {
+      if (!control.hasAttribute('data-explorer-node') || !['Enter', ' '].includes(event.key)) return;
+      event.preventDefault();
+    }
+    let focusSelector;
+    if (control.hasAttribute('data-show-working')) {
+      start = working[0].id; stage = 2; focusSelector = '[data-show-working]';
+    } else if (control.hasAttribute('data-stage')) {
+      const next = Number(control.dataset.stage);
+      if (next >= 2 && !matches.get(start)) return;
+      stage = next; focusSelector = `[data-stage="${stage}"]`;
+    } else {
+      start = Number(control.dataset.start ?? control.dataset.explorerNode);
+      stage = 1;
+      focusSelector = control.hasAttribute('data-start') ? `[data-start="${start}"]` : `[data-explorer-node="${start}"]`;
+    }
+    draw(); container.querySelector(focusSelector)?.focus({ preventScroll: true });
+  }
+  container.onclick = activate;
+  container.onkeydown = activate;
+  draw();
+}
+
 function showComparison(i) {
-  const old = state.history[i], mapping = findEmbedding(old, state.draft);
-  $('#compare-title').textContent = `Does tree ${i + 1} hide in your tree?`;
-  $('#compare-content').innerHTML = `<div class="comparison"><div><h3>TREE ${i + 1} · ALREADY PLANTED</h3><div class="diagram">${treeSvg(old, { sourceLabels: Boolean(mapping) })}</div></div><span class="comparison-mark" aria-hidden="true">${mapping ? '=' : '≠'}</span><div><h3>YOUR CURRENT TREE</h3><div class="diagram">${treeSvg(state.draft, { mapping, source: old })}</div></div></div><p class="comparison-caption">${mapping ? `<strong>Yes! That makes this move illegal.</strong> Match the numbered dots: 1 to 1, 2 to 2, and so on. The gold lines trace the old branches. Faded branches can be ignored; unnumbered dots along gold lines are skipped.` : '<strong>No match here.</strong> You can’t match all this old tree’s colors and branching pattern inside your current tree. Remember to check the other old trees too, and stay within your dot limit.'}</p>`;
+  $('#compare-title').textContent = 'Explore a hidden tree';
+  $('#compare-content').innerHTML = `<label class="compare-picker">Which earlier tree?<select id="compare-source">${state.history.map((_, index) => `<option value="${index}" ${index === i ? 'selected' : ''}>Tree ${index + 1}</option>`).join('')}</select></label><div id="game-explorer"></div>`;
+  const draw = index => mountExplorer($('#game-explorer'), state.history[index], state.draft, { sourceName: `Tree ${index + 1} · already planted`, startWithMatch: true });
+  draw(i);
+  $('#compare-source').addEventListener('change', event => draw(Number(event.target.value)));
   $('#compare-dialog').showModal();
 }
 $('#close-compare').addEventListener('click', () => $('#compare-dialog').close());
@@ -244,3 +313,17 @@ function guess(answer) { lessonGuess = answer; lessonRevealed = true; renderLess
 $('#guess-yes').addEventListener('click', () => guess(true));
 $('#guess-no').addEventListener('click', () => guess(false));
 render();
+
+
+const subtreeExamples = [
+  { old: [0, [1], [1]], next: [2, [0, [2, [1]], [1], [2]]] },
+  { old: [0, [1]], next: [2, [0, [2], [0]]] },
+  { old: [0, [1], [1]], next: [0, [2, [1], [1]]] },
+  { old: [0], next: [2, [1, [0]], [0]] }
+];
+function renderSubtreeExample() {
+  const example = subtreeExamples[Number($('#subtree-example').value)];
+  mountExplorer($('#demo-explorer'), makeTree(example.old), makeTree(example.next));
+}
+$('#subtree-example').addEventListener('change', renderSubtreeExample);
+renderSubtreeExample();
