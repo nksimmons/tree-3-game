@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#172d2b">
+  <meta name="description" content="A little tree game with a very big idea. Build colorful trees, spot hidden patterns, and learn the rules of TREE(3) together.">
+  <title>Tiny Forest — the TREE(3) game</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23172d2b'/%3E%3Cpath d='M32 16v16L16 48m16-16 16 16' fill='none' stroke='%23fff' stroke-width='5'/%3E%3Ccircle cx='32' cy='16' r='9' fill='%23f5cd61'/%3E%3Ccircle cx='16' cy='48' r='9' fill='%235693db'/%3E%3Ccircle cx='48' cy='48' r='9' fill='%23e47d6b'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="./" aria-label="Tiny Forest home"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M20 9v11L9 31m11-11 11 11"/><circle cx="20" cy="9" r="5"/><circle cx="9" cy="31" r="5"/><circle cx="31" cy="31" r="5"/></svg><span>Tiny Forest<span class="brand-sub">A GAME OF TREE(3)</span></span></a>
+    <nav aria-label="Main navigation"><button class="nav-button active" data-view="play" aria-current="page">Play</button><button class="nav-button" data-view="learn">How trees hide</button></nav>
+    <span class="header-note">Small trees. Enormous possibilities.</span>
+  </header>
+  <main>
+    <section id="play-view" aria-label="Play the tree game">
+      <div class="intro"><div><span class="eyebrow">A LITTLE PUZZLE TO PLAY TOGETHER</span><h1>How far can your forest grow?</h1><p>Make a new tree. Don’t let an old tree hide inside it.</p></div><button id="new-game" class="button subtle">New forest</button></div>
+      <div class="game-layout">
+        <section class="workbench" aria-labelledby="build-title">
+          <div class="panel-header"><div><span class="eyebrow" id="move-label">TREE NO. 01</span><h2 id="build-title">Build your tree</h2></div><span id="node-budget" class="budget">1 / 1 dot</span></div>
+          <div class="editor-toolbar"><span>Selected dot’s color</span><div id="palette" class="palette" role="group" aria-label="Change selected dot color"></div></div>
+          <div id="tree-canvas" class="tree-canvas" aria-label="Tree editor"></div>
+          <div class="editor-actions"><button id="add-node" class="button outline"><span aria-hidden="true">＋</span> Add a child</button><button id="remove-node" class="button text-button">Remove branch</button><button id="undo-edit" class="icon-button" aria-label="Undo last edit" title="Undo last edit">↶</button></div>
+          <p id="editor-hint" class="editor-hint">Every tree starts with one dot: the root.</p>
+          <div class="submit-bar"><button id="check-tree" class="button outline">Check my tree</button><button id="plant-tree" class="button primary">Plant this tree <span aria-hidden="true">✳</span></button></div>
+        </section>
+        <aside class="coach-column">
+          <div class="mode-control"><label for="mode">YOUR CHALLENGE</label><select id="mode"><option value="3">TREE(3) · Three colors</option><option value="2">TREE(2) · Two-color warm-up</option><option value="1">TREE(1) · One-color warm-up</option></select></div>
+          <section id="feedback" class="coach-card" aria-live="polite" aria-atomic="true"></section>
+          <section class="rules-card"><span class="eyebrow">THREE LITTLE RULES</span><ol><li><strong>Pick from your colors.</strong><span>Same color means the same kind of dot.</span></li><li><strong id="budget-rule">Tree 1 gets up to 1 dot.</strong><span>Fewer dots are okay. Zero isn’t a tree!</span></li><li><strong>No old tree hiding inside.</strong><span>Check against every tree you’ve planted.</span></li></ol><button class="lesson-link" data-view="learn">What counts as “hiding”?</button></section>
+        </aside>
+      </div>
+      <section class="forest-section" aria-labelledby="forest-title"><div class="forest-heading"><div><span class="eyebrow">YOUR GROWING COLLECTION</span><h2 id="forest-title">The forest <span id="forest-count">0 trees</span></h2></div><button id="take-back" class="button text-button" disabled>Take back last tree</button></div><div id="forest" class="forest"></div></section>
+      <p class="together-note"><span aria-hidden="true">✳</span> Take turns building, or solve each move together. A wrong guess is just a chance to discover a pattern.</p>
+    </section>
+    <section id="learn-view" hidden aria-labelledby="learn-title">
+      <div class="intro"><div><span class="eyebrow">THE SECRET IS IN THE CONNECTIONS</span><h1 id="learn-title">Can you spot the hidden tree?</h1><p>“Hiding” is more than looking exactly the same. Let’s try it.</p></div><button class="button outline" data-view="play">Back to your forest</button></div>
+      <div id="lesson-tabs" class="lesson-tabs" role="group" aria-label="Choose a lesson"></div>
+      <section class="lesson-panel"><div class="lesson-heading"><span id="lesson-number" class="eyebrow"></span><h2 id="lesson-title"></h2><p id="lesson-prompt">Does the old tree hide inside the new one?</p></div><div class="comparison"><div><h3>THE OLD TREE</h3><div id="lesson-old" class="diagram"></div></div><span class="comparison-mark" aria-hidden="true">?</span><div><h3>THE NEW TREE</h3><div id="lesson-new" class="diagram"></div></div></div><div class="quiz-buttons"><button id="guess-yes" class="button primary">Yes, it’s hiding!</button><button id="guess-no" class="button outline">No, it isn’t</button></div><div id="lesson-answer" class="lesson-answer" aria-live="polite"></div></section>
+      <div class="learn-notes"><section><h2>A tree is dots + connections.</h2><p>The top dot is the <strong>root</strong>. Every other dot has one parent above it. Branches go downward, never loop, and never join back together.</p></section><section><h2>Find the whole old pattern.</h2><p>Match every old dot to a different dot of the same color. Follow branches downward. You can skip extra dots and branches, but separate branches must split at the matching dot.</p></section><section><h2>Why TREE(3)?</h2><p>The 3 means three colors. TREE(3) is the longest possible legal sequence: a finite number so huge we’ll never finish counting it. Our challenge is to make our own sequence last!</p></section></div>
+      <details class="math-note"><summary>The precise rule, for curious grown-ups</summary><p>We use unordered, rooted trees with exact color matching and <strong>infimum-preserving homeomorphic embedding</strong>. The earlier root may map to any dot in the later tree. Each edge maps to a downward path; paths from different children must enter different immediate child branches of the matched parent. Equivalently, the map is injective and preserves colors and least common ancestors. Left-to-right order does not matter. This is not ordinary, exact subtree matching.</p><p>Tree number <em>i</em> has at least one and at most <em>i</em> dots. No earlier tree may embed in any later tree. Finishing your own sequence doesn’t mean you’ve found the maximum TREE(3).</p><p>Based on <a href="https://fomarchive.ugent.be/1998-September/002153.html" target="_blank" rel="noreferrer">Harvey Friedman’s formulation of labeled finite trees</a>.</p></details>
+    </section>
+  </main>
+  <footer><span class="footer-brand">Tiny Forest</span><span>A very big idea. One little tree at a time.</span><span id="save-status">Saved on this device</span></footer>
+  <dialog id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-description"><span class="eyebrow">A FRESH PATCH OF POSSIBILITY</span><h2 id="confirm-title">Start a new forest?</h2><p id="confirm-description">This replaces your forest and the tree you’re building.</p><div class="dialog-actions"><button id="confirm-cancel" type="button" class="button outline" autofocus>Keep playing</button><button id="confirm-accept" type="button" class="button primary">Start fresh</button></div></dialog>
+  <dialog id="compare-dialog" aria-labelledby="compare-title"><div class="dialog-heading"><h2 id="compare-title">Look for this tree</h2><button id="close-compare" class="icon-button" aria-label="Close comparison">×</button></div><div id="compare-content"></div></dialog>
+  <noscript>This game needs JavaScript to draw trees and check your moves. Please enable JavaScript in your browser.</noscript>
+</body>
+</html>
